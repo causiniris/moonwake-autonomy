@@ -4,7 +4,7 @@
 
 本仓库采用 **ROS 2 Monorepo**：一个 Git 仓库对应一个 ROS 2 Workspace，所有上位机 Package 在同一个版本下构建、联调和部署。MCU 固件不放在本仓库中，但双方使用的接口和协议必须具有明确、可追踪的版本。
 
-> 当前状态：仓库基础结构已经建立，尚未包含可运行的 ROS 2 Package。首个功能任务将从独立分支接入相机采集链路。
+> 当前状态：相机任务分支已纳入 RealSense 官方 ROS 2 驱动的两个必要 Package；尚待在目标 Ubuntu 主机完成 SDK 安装、构建与 D455 实机验证。
 
 ## 开发环境
 
@@ -27,6 +27,8 @@ moonwake-autonomy/
 ├── log/                         # colcon 生成，不提交
 ├── .github/
 │   └── pull_request_template.md
+├── docs/                        # 本仓库的设备接入与验证说明
+├── third_party/                 # 纳入的上游源码版本与许可声明
 ├── .editorconfig
 ├── .gitattributes
 ├── .gitignore
@@ -36,15 +38,22 @@ moonwake-autonomy/
 
 仓库根目录只有一套 `build/`、`install/` 和 `log/`。每个 Package 根据实际需要维护自己的 `src/`、`include/`、`launch/`、`config/` 和 `test/`，不得在 Package 内部重复创建工作区级构建目录。
 
-计划中的模块边界如下。表中的 Package 会在对应功能开始开发时创建，不提前建立没有内容的空包。
+已纳入的第三方 ROS 2 Package 如下。来源、版本和许可见 [RealSense 上游源码记录](third_party/realsense_ros/README.md)。
+
+| Package | 职责 |
+| --- | --- |
+| `realsense2_camera` | D455 相机采集与 ROS 2 话题发布 |
+| `realsense2_camera_msgs` | 相机驱动使用的消息、服务与 Action |
+
+计划中的自有模块边界如下。表中的 Package 会在对应功能确实需要本仓库代码时创建，不提前建立没有内容的空包。
 
 | Package | 职责 |
 | --- | --- |
 | `moonwake_interfaces` | 自定义 Message、Service、Action 与接口兼容约定 |
-| `moonwake_camera` | 相机接入、图像采集、时间戳与相机信息 |
+| `moonwake_camera` | 官方驱动不能覆盖时的相机适配代码；启动参数可先放在 `moonwake_bringup` |
 | `moonwake_perception` | 目标检测、跟踪与视觉测量 |
 | `moonwake_localization` | 定位观测与位姿估计 |
-| `moonwake_fusion` | GNSS、IMU、视觉等多传感器状态估计 |
+| `moonwake_fusion` | 当融合实现需要独立维护时，承载 GNSS、IMU、视觉等多传感器状态估计 |
 | `moonwake_planning` | 任务与路径规划 |
 | `moonwake_navigation` | 导航决策与局部目标生成 |
 | `moonwake_mcu_bridge` | 上位机与 MCU 之间的通信桥接 |
@@ -83,12 +92,12 @@ git switch -c feat/camera-usb-capture
 
 ## 构建与测试
 
-当前初始化版本还没有 ROS 2 Package，执行 `colcon list` 没有输出属于正常现象。首个 Package 合入后，在 Ubuntu 22.04 中从仓库根目录执行：
+相机驱动源码依赖单独安装的 RealSense SDK `librealsense2`，最低版本为 2.56。请先按 [D455 接入说明](docs/realsense_d455.md)安装并确认 SDK，再在 Ubuntu 22.04 中从仓库根目录执行：
 
 ```bash
 source /opt/ros/humble/setup.bash
 
-rosdep install --from-paths src --ignore-src -r -y
+rosdep install --from-paths src --ignore-src --skip-keys=librealsense2 -r -y
 colcon build --symlink-install
 
 source install/setup.bash
@@ -98,7 +107,7 @@ colcon test-result --verbose
 
 修改 C++ 源码后必须重新构建。不要把 `--symlink-install` 理解为 C++ 代码无需编译。
 
-具体 Package 的启动方式、参数与验证方法由对应 Package 的 README 说明。仓库根 README 只保留全局入口，不复制各模块的全部使用说明。
+相机的启动方式、参数与验证方法见 [D455 接入说明](docs/realsense_d455.md)。其他 Package 的具体说明由各自 README 维护。
 
 ## 版本与验证含义
 
@@ -128,4 +137,4 @@ ROS 2 参数、传感器标定和正式运行配置通常是可复现性的一�
 
 ## License
 
-本仓库目前尚未选择开源许可证。在正式添加 `LICENSE` 前，请勿假定仓库内容已经获得对外复制、修改或再发布授权。
+本仓库自有代码目前尚未选择开源许可证。在正式添加根目录 `LICENSE` 前，请勿假定自有内容已经获得对外复制、修改或再发布授权。纳入的 RealSense 上游源码依照其独立的 Apache 2.0 许可与声明分发，见 [third_party/realsense_ros](third_party/realsense_ros/README.md)。
