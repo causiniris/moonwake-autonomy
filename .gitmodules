@@ -1,0 +1,6 @@
+[submodule "src/glim"]
+	path = src/glim
+	url = git@github.com:causiniris/glim.git
+[submodule "src/glim_ros2"]
+	path = src/glim_ros2
+	url = git@github.com:causiniris/glim_ros2.git
