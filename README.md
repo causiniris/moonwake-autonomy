@@ -4,7 +4,7 @@
 
 本仓库采用 **ROS 2 Monorepo**：一个 Git 仓库对应一个 ROS 2 Workspace，所有上位机 Package 在同一个版本下构建、联调和部署。MCU 固件不放在本仓库中，但双方使用的接口和协议必须具有明确、可追踪的版本。
 
-> 当前状态：仓库基础结构已经建立，尚未包含可运行的 ROS 2 Package。首个功能任务将从独立分支接入相机采集链路。
+> 当前分支正在开发 VLP-16 雷达接入：已添加点云检查节点与 GLIM 源码子模块。点云检查节点已完成构建；GLIM 无 IMU 建图配置和实机建图效果仍待验证。
 
 ## 开发环境
 
@@ -22,6 +22,9 @@
 ```text
 moonwake-autonomy/
 ├── src/                         # 所有 ROS 2 Package
+│   ├── glim/                    # GLIM 核心库（Git 子模块）
+│   ├── glim_ros2/               # GLIM ROS 2 接口（Git 子模块）
+│   └── moonwake_localization/   # 定位与点云检查
 ├── build/                       # colcon 生成，不提交
 ├── install/                     # colcon 生成，不提交
 ├── log/                         # colcon 生成，不提交
@@ -36,7 +39,7 @@ moonwake-autonomy/
 
 仓库根目录只有一套 `build/`、`install/` 和 `log/`。每个 Package 根据实际需要维护自己的 `src/`、`include/`、`launch/`、`config/` 和 `test/`，不得在 Package 内部重复创建工作区级构建目录。
 
-计划中的模块边界如下。表中的 Package 会在对应功能开始开发时创建，不提前建立没有内容的空包。
+模块边界如下。除当前分支已有的 `moonwake_localization` 和第三方子模块外，其他 Package 按对应功能的开发进度创建。
 
 | Package | 职责 |
 | --- | --- |
@@ -60,7 +63,10 @@ cd moonwake-autonomy
 
 git remote add upstream git@github.com:moonwake-vision/moonwake-autonomy.git
 git remote -v
+git submodule update --init --recursive
 ```
+
+GLIM 子模块固定在主仓库记录的提交，目前使用个人 Fork 的 SSH 地址；获取时需要能够访问对应仓库。团队集成时应共同确认子模块仓库的长期维护方式和访问权限。
 
 固定约定为：
 
@@ -83,22 +89,20 @@ git switch -c feat/camera-usb-capture
 
 ## 构建与测试
 
-当前初始化版本还没有 ROS 2 Package，执行 `colcon list` 没有输出属于正常现象。首个 Package 合入后，在 Ubuntu 22.04 中从仓库根目录执行：
+在 Ubuntu 22.04 上，从仓库根目录构建当前点云检查节点：
 
 ```bash
 source /opt/ros/humble/setup.bash
-
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install
-
+colcon build --symlink-install --packages-select moonwake_localization
 source install/setup.bash
-colcon test
-colcon test-result --verbose
+ros2 run moonwake_localization pointcloud_preflight_node
 ```
 
 修改 C++ 源码后必须重新构建。不要把 `--symlink-install` 理解为 C++ 代码无需编译。
 
-具体 Package 的启动方式、参数与验证方法由对应 Package 的 README 说明。仓库根 README 只保留全局入口，不复制各模块的全部使用说明。
+该节点默认订阅 `/velodyne_points`，检查消息结构、坐标系、时间戳及每点的 `time`、`ring`，并输出诊断信息。它不修改或转发点云；使用时需另行启动 Velodyne ROS 2 驱动。当前实现仅在收到消息时报告，尚不能独立检测持续断流。
+
+GLIM 的源码构建需要额外的 GTSAM、gtsam_points 等依赖；启用 GPU 和可视化还需要对应的 CUDA 工具链和图形依赖。当前分支尚未提供可复现的完整依赖安装步骤和 VLP-16 无 IMU 配置，不能仅凭点云检查节点构建成功认定 GLIM 建图可用。
 
 ## 版本与验证含义
 
