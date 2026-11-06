@@ -4,7 +4,7 @@
 
 本仓库采用 **ROS 2 Monorepo**：一个 Git 仓库对应一个 ROS 2 Workspace，所有上位机 Package 在同一个版本下构建、联调和部署。MCU 固件不放在本仓库中，但双方使用的接口和协议必须具有明确、可追踪的版本。
 
-> 当前分支正在开发 VLP-16 雷达接入：已添加点云检查节点与 GLIM 源码子模块。点云检查节点已完成构建；GLIM 无 IMU 建图配置和实机建图效果仍待验证。
+> 当前分支正在开发 VLP-16 雷达接入：已添加点云检查节点、GLIM 源码子模块及无 IMU 测试配置。点云检查节点已完成构建；GLIM 实机建图效果仍待验证。
 
 ## 开发环境
 
@@ -102,7 +102,33 @@ ros2 run moonwake_localization pointcloud_preflight_node
 
 该节点默认订阅 `/velodyne_points`，检查消息结构、坐标系、时间戳及每点的 `time`、`ring`，并输出诊断信息。它不修改或转发点云；使用时需另行启动 Velodyne ROS 2 驱动。当前实现仅在收到消息时报告，尚不能独立检测持续断流。
 
-GLIM 的源码构建需要额外的 GTSAM、gtsam_points 等依赖；启用 GPU 和可视化还需要对应的 CUDA 工具链和图形依赖。当前分支尚未提供可复现的完整依赖安装步骤和 VLP-16 无 IMU 配置，不能仅凭点云检查节点构建成功认定 GLIM 建图可用。
+### VLP-16 无 IMU 的 GLIM 测试
+
+GLIM 的源码构建需要额外的 GTSAM、gtsam_points 等依赖；本配置的全局建图使用 GPU，还需要 CUDA 工具链和图形依赖。当前分支尚未提供完整依赖安装步骤，必须先完成 GLIM 和 `glim_ros` 的构建。
+
+在雷达已供电、网络已配置好后，先单独启动 Velodyne 驱动：
+
+```bash
+source /opt/ros/humble/setup.bash
+ros2 launch velodyne velodyne-all-nodes-VLP16-launch.py
+```
+
+在另一个终端构建本包并启动 GLIM 和点云检查节点：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select moonwake_localization
+source install/setup.bash
+ros2 launch moonwake_localization glim_vlp16_lidar_only.launch.py
+```
+
+启动文件使用 `config/glim/vlp16_lidar_only/` 中的独立配置：采用 GLIM 的 CT LiDAR-only 里程计，关闭子图和全局建图中的 IMU 因子，并将点云输入设为 `/velodyne_points`。`RELIABLE / VOLATILE` 订阅 QoS 对应此前观测到的 Velodyne 发布端；更换驱动配置后应重新核对。
+
+此版本 GLIM 仍会建立一个未使用的 IMU 订阅，配置中的 `/moonwake_unused_imu` 是占位话题，不表示需要接入 IMU。`velodyne` 暂时作为位姿和点云坐标系，不代表已经完成雷达到船体的外参标定。
+
+GLIM 正常退出时会保存结果；启动文件默认使用 `/tmp` 下每次不同的目录，并在启动参数中显示该路径。`/tmp` 不保证长期保存，需要保留结果时可通过 `dump_path` 指定一个未使用的目录。
+
+目前已通过无界面模块加载和模拟点云到 LiDAR 里程计的基本测试，但真实雷达的点云排列、时间戳、GPU 建图与可视化效果仍需实机验证。GLIM 自带窗口和 RViz 模块默认启用；RViz 中可使用 `map` 固定坐标系和 `/glim_ros/map` 点云话题观察地图。
 
 ## 版本与验证含义
 
